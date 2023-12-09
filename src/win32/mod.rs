@@ -1,10 +1,10 @@
+mod bitmap;
 use std::{
     ffi::CString,
     ops::Deref,
     sync::mpsc::{sync_channel, Receiver, SyncSender},
     thread::spawn,
 };
-
 use bitflags::bitflags;
 use eyre::bail;
 use windows::{
@@ -23,11 +23,8 @@ use windows::{
         },
     },
 };
-
-use crate::{
-    bitmap::Bitmap,
-    control::{ToBrain, ToController},
-};
+use crate::control::{ToBrain, ToController, Controller, Eyes};
+use self::bitmap::Bitmap;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SIZE {
@@ -295,10 +292,10 @@ pub mod keycodes {
     pub const VK_OEM_CLEAR: u16 = 0xFE;
 }
 
-pub struct Eyes {
+pub struct Win32Eyes {
     hwnd: HWND,
 }
-impl Eyes {
+impl Win32Eyes {
     pub fn new(window_name: &str) -> eyre::Result<Self> {
         let cstr = CString::new(window_name).unwrap();
         let window =
@@ -308,8 +305,8 @@ impl Eyes {
         }
         Ok(Self { hwnd: window })
     }
-    pub fn make_hands(&self) -> Controller {
-        Controller { hwnd: self.hwnd }
+    pub fn make_hands(&self) -> Win32Controller {
+        Win32Controller { hwnd: self.hwnd }
     }
     pub fn trect(&self) -> RECT {
         window_rect(self.hwnd)
@@ -329,7 +326,7 @@ impl Eyes {
             send_in.send(next)?;
         }
     }
-    pub fn run(self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
+    fn _run(self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
         let (s1, r1) = sync_channel(2);
         let (s2, r2) = sync_channel(2);
         for _ in 0..2 {
@@ -353,13 +350,13 @@ impl Eyes {
         }
     }
 }
-pub struct Controller {
+pub struct Win32Controller {
     hwnd: HWND,
 }
-impl Controller {
+impl Win32Controller {
     pub fn new(name: &str) -> eyre::Result<Self> {
         Ok(Self {
-            hwnd: Eyes::new(name)?.hwnd,
+            hwnd: Win32Eyes::new(name)?.hwnd,
         })
     }
     pub fn move_mouse(&self, x: i32, y: i32) {
@@ -389,7 +386,7 @@ impl Controller {
         ]);
         unsafe { SetActiveWindow(prev) };
     }
-    pub fn run(mut self, input: Receiver<ToController>) -> eyre::Result<()> {
+    fn _run(mut self, input: Receiver<ToController>) -> eyre::Result<()> {
         loop {
             match input.recv()? {
                 ToController::MoveMouse([x, y]) => self.move_mouse(x, y),
@@ -397,5 +394,24 @@ impl Controller {
                 ToController::CastHook => self.cast(),
             }
         }
+    }
+}
+
+impl Controller for Win32Controller {
+    fn from_window_name(name: &str) -> eyre::Result<Self> {
+        Self::new(name)
+    }
+
+    fn run(self, recv: Receiver<ToController>) -> eyre::Result<()> {
+        Self::_run(self, recv)
+    }
+}
+impl Eyes for Win32Eyes {
+    fn from_window_name(name: &str) -> eyre::Result<Self> {
+        Self::new(name)
+    }
+
+    fn run(self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
+        self._run(send)
     }
 }
