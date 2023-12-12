@@ -10,19 +10,25 @@ use x11::xlib::{self, _XDisplay};
 
 pub struct XController {
     window: u64,
+    display: *mut _XDisplay,
 }
+
 pub struct XEyes {
     window: u64,
+    display: *mut _XDisplay,
 }
 
 fn get_window_id_by_title(name: &str) -> eyre::Result<xlib::Window> {
     let output = Command::new("xdotool")
-        .args(&["search", "--name", name])
+        .args(&["search", "--name", &format!("{name}$")])
         .output()?;
 
     let binding = String::from_utf8(output.stdout).expect("Error getting window id");
     let window_id_str = binding.as_str();
-    let window_id = window_id_str.trim().parse()?;
+    let window_id = window_id_str
+        .trim()
+        .parse()
+        .expect("Window \'World of Warcraft\' not found");
     Ok(window_id)
 }
 
@@ -30,19 +36,15 @@ impl XEyes {
     pub fn new(window_name: &str) -> eyre::Result<Self> {
         Ok(Self {
             window: get_window_id_by_title(window_name)?,
+            display: unsafe { xlib::XOpenDisplay(ptr::null()) },
         })
     }
 
-    pub fn get_image(
-        &self,
-        display: *mut _XDisplay,
-    ) -> eyre::Result<ImageBuffer<Rgb<u8>, Vec<u8>>> {
+    pub fn get_image(&self) -> eyre::Result<ImageBuffer<Rgb<u8>, Vec<u8>>> {
         unsafe {
-            // Open the display
-
             // Get the window attributes
             let mut window_attributes: xlib::XWindowAttributes = std::mem::zeroed();
-            xlib::XGetWindowAttributes(display, self.window, &mut window_attributes);
+            xlib::XGetWindowAttributes(self.display, self.window, &mut window_attributes);
 
             // Get the dimensions of the window
             let width = window_attributes.width as u32;
@@ -50,7 +52,7 @@ impl XEyes {
 
             // Create an XImage structure to hold the screenshot
             let image = xlib::XGetImage(
-                display,
+                self.display,
                 self.window,
                 0,
                 0,
@@ -80,103 +82,120 @@ impl XEyes {
             return Ok(image_buffer);
         }
     }
-    fn _run(&self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
-        let display = unsafe { xlib::XOpenDisplay(ptr::null()) };
-        loop {
-            send.send(ToBrain::NextFrame(self.get_image(display)?))?;
-        }
-    }
 }
 
 impl XController {
     pub fn new(window_name: &str) -> eyre::Result<Self> {
         Ok(Self {
             window: get_window_id_by_title(window_name)?,
+            display: unsafe { xlib::XOpenDisplay(ptr::null()) },
         })
     }
 
-    pub fn move_mouse_to_coordinate(&self, display: *mut _XDisplay, x: i32, y: i32) {
+    pub fn move_mouse_to_coordinate(&self, x: i32, y: i32) {
         unsafe {
             // Move the mouse to the specified coordinates
-            xlib::XWarpPointer(display, 0, self.window, 0, 0, 0, 0, x, y);
-            xlib::XFlush(display);
+            xlib::XWarpPointer(self.display, 0, self.window, 0, 0, 0, 0, x, y);
+            xlib::XFlush(self.display);
         }
     }
-    pub fn left_click(&self, display: *mut _XDisplay, x: i32, y: i32) {
+    pub fn left_click(&self, x: i32, y: i32) {
         unsafe {
             {
                 // Create a button press event
-                let mut button_event: xlib::XButtonEvent = std::mem::zeroed();
-                button_event.type_ = xlib::ButtonPress;
-                button_event.display = display;
-                button_event.window = self.window;
-                button_event.subwindow = 0;
-                button_event.time = 0;
-                button_event.x = x;
-                button_event.y = y;
-                button_event.same_screen = xlib::True;
-                button_event.button = 1; // 1 corresponds to the left mouse button
+                let button_event: xlib::XButtonEvent = xlib::XButtonEvent {
+                    type_: xlib::ButtonPress,
+                    display: self.display,
+                    window: self.window,
+                    subwindow: 0,
+                    time: 0,
+                    x: x,
+                    y: y,
+                    same_screen: xlib::True,
+                    button: 1,
+                    serial: Default::default(),
+                    send_event: Default::default(),
+                    root: Default::default(),
+                    x_root: Default::default(),
+                    y_root: Default::default(),
+                    state: Default::default(),
+                };
 
-                let mut xevent: xlib::XEvent = std::mem::zeroed();
-                xevent.button = button_event;
+                let mut xevent: xlib::XEvent = xlib::XEvent {
+                    button: button_event,
+                };
 
                 // Send the button press event
-                (xlib::XSendEvent)(
-                    display,
+                xlib::XSendEvent(
+                    self.display,
                     self.window,
                     xlib::True,
                     xlib::ButtonPressMask,
                     &mut xevent,
                 );
-                (xlib::XFlush)(display);
+                xlib::XFlush(self.display);
             }
 
             {
-                let mut button_event: xlib::XButtonEvent = std::mem::zeroed();
-                button_event.type_ = xlib::ButtonRelease;
-                button_event.display = display;
-                button_event.window = self.window;
-                button_event.subwindow = 0;
-                button_event.time = 0;
-                button_event.x = x;
-                button_event.y = y;
-                button_event.same_screen = xlib::True;
-                button_event.button = 1; // 1 corresponds to the left mouse button
+                let button_event: xlib::XButtonEvent = xlib::XButtonEvent {
+                    type_: xlib::ButtonRelease,
+                    display: self.display,
+                    window: self.window,
+                    subwindow: 0,
+                    time: 0,
+                    x: x,
+                    y: y,
+                    same_screen: xlib::True,
+                    button: 1,
+                    serial: Default::default(),
+                    send_event: Default::default(),
+                    root: Default::default(),
+                    x_root: Default::default(),
+                    y_root: Default::default(),
+                    state: Default::default(),
+                };
 
-                let mut xevent: xlib::XEvent = std::mem::zeroed();
-                xevent.button = button_event;
+                let mut xevent: xlib::XEvent = xlib::XEvent {
+                    button: button_event,
+                };
 
                 // Send the button press event
-                (xlib::XSendEvent)(
-                    display,
+                xlib::XSendEvent(
+                    self.display,
                     self.window,
                     xlib::True,
                     xlib::ButtonReleaseMask,
                     &mut xevent,
                 );
-                (xlib::XFlush)(display);
+                xlib::XFlush(self.display);
             }
         }
     }
-    pub fn cast_hook(&self, display: *mut _XDisplay) {
+    pub fn cast_hook(&self) {
         unsafe {
             {
-                let mut key_event: xlib::XKeyEvent = std::mem::zeroed();
-                key_event.type_ = xlib::KeyPress;
-                key_event.display = display;
-                key_event.window = self.window;
-                key_event.subwindow = 0;
-                key_event.time = 0;
-                key_event.x = 0;
-                key_event.y = 0;
-                key_event.same_screen = xlib::True;
-                key_event.keycode = 49;
+                let key_event: xlib::XKeyEvent = xlib::XKeyEvent {
+                    type_: xlib::KeyPress,
+                    display: self.display,
+                    window: self.window,
+                    subwindow: 0,
+                    time: 0,
+                    x: 0,
+                    y: 0,
+                    same_screen: xlib::True,
+                    keycode: 49,
+                    serial: Default::default(),
+                    send_event: Default::default(),
+                    root: Default::default(),
+                    x_root: Default::default(),
+                    y_root: Default::default(),
+                    state: Default::default(),
+                };
 
-                let mut xevent: xlib::XEvent = std::mem::zeroed();
-                xevent.key = key_event;
+                let mut xevent: xlib::XEvent = xlib::XEvent { key: key_event };
 
-                (xlib::XSendEvent)(
-                    display,
+                xlib::XSendEvent(
+                    self.display,
                     self.window,
                     xlib::True,
                     xlib::KeyPressMask,
@@ -184,25 +203,31 @@ impl XController {
                 );
 
                 // Flush the X server to ensure the changes take effect
-                (xlib::XFlush)(display);
+                xlib::XFlush(self.display);
             }
             {
-                let mut key_event: xlib::XKeyEvent = std::mem::zeroed();
-                key_event.type_ = xlib::KeyRelease;
-                key_event.display = display;
-                key_event.window = self.window;
-                key_event.subwindow = 0;
-                key_event.time = 0;
-                key_event.x = 0;
-                key_event.y = 0;
-                key_event.same_screen = xlib::True;
-                key_event.keycode = 49;
+                let key_event: xlib::XKeyEvent = xlib::XKeyEvent {
+                    type_: xlib::KeyRelease,
+                    display: self.display,
+                    window: self.window,
+                    subwindow: 0,
+                    time: 0,
+                    x: 0,
+                    y: 0,
+                    same_screen: xlib::True,
+                    keycode: 49,
+                    serial: Default::default(),
+                    send_event: Default::default(),
+                    root: Default::default(),
+                    x_root: Default::default(),
+                    y_root: Default::default(),
+                    state: Default::default(),
+                };
 
-                let mut xevent: xlib::XEvent = std::mem::zeroed();
-                xevent.key = key_event;
+                let mut xevent: xlib::XEvent = xlib::XEvent { key: key_event };
 
-                (xlib::XSendEvent)(
-                    display,
+                xlib::XSendEvent(
+                    self.display,
                     self.window,
                     xlib::True,
                     xlib::KeyReleaseMask,
@@ -210,18 +235,7 @@ impl XController {
                 );
 
                 // Flush the X server to ensure the changes take effect
-                (xlib::XFlush)(display);
-            }
-        }
-    }
-
-    fn _run(&self, input: Receiver<ToController>) -> eyre::Result<()> {
-        let display = unsafe { xlib::XOpenDisplay(ptr::null()) };
-        loop {
-            match input.recv()? {
-                ToController::MoveMouse([x, y]) => self.move_mouse_to_coordinate(display, x, y),
-                ToController::PerformClick([x, y]) => self.left_click(display, x, y),
-                ToController::CastHook => self.cast_hook(display),
+                xlib::XFlush(self.display);
             }
         }
     }
@@ -231,8 +245,14 @@ impl Controller for XController {
         Self::new(name)
     }
 
-    fn run(self, recv: Receiver<ToController>) -> eyre::Result<()> {
-        Self::_run(&self, recv)
+    fn run(self, input: Receiver<ToController>) -> eyre::Result<()> {
+        loop {
+            match input.recv()? {
+                ToController::MoveMouse([x, y]) => self.move_mouse_to_coordinate(x, y),
+                ToController::PerformClick([x, y]) => self.left_click(x, y),
+                ToController::CastHook => self.cast_hook(),
+            }
+        }
     }
 }
 impl Eyes for XEyes {
@@ -241,6 +261,14 @@ impl Eyes for XEyes {
     }
 
     fn run(self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
-        self._run(send)
+        loop {
+            send.send(ToBrain::NextFrame(self.get_image()?))?;
+        }
     }
 }
+
+unsafe impl Send for XController {}
+unsafe impl Sync for XController {}
+
+unsafe impl Send for XEyes {}
+unsafe impl Sync for XEyes {}
