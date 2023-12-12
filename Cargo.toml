@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["windows"]
+default = ["xserver"]
 windows = ["dep:windows"]
 xserver = []
 wayland = []
@@ -17,4 +17,5 @@ bitflags = "2.4.1"
 eyre = "0.6.9"
 image = "0.24.7"
 rayon = "1.8.0"
+x11 = { version = "2.18.1", features = ["xlib"] }
 windows = { version = "0.52.0", optional = true, features = ["Win32_Foundation", "Win32_UI", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Input", "Win32_Graphics", "Win32_Graphics_Gdi"] }
