@@ -1,12 +1,14 @@
 mod bitmap;
+use self::bitmap::Bitmap;
+use crate::control::{Controller, Eyes, ToBrain, ToController};
+use bitflags::bitflags;
+use eyre::bail;
 use std::{
     ffi::CString,
     ops::Deref,
     sync::mpsc::{sync_channel, Receiver, SyncSender},
     thread::spawn,
 };
-use bitflags::bitflags;
-use eyre::bail;
 use windows::{
     core::PCSTR,
     Win32::{
@@ -23,8 +25,6 @@ use windows::{
         },
     },
 };
-use crate::control::{ToBrain, ToController, Controller, Eyes};
-use self::bitmap::Bitmap;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SIZE {

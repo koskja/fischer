@@ -2,23 +2,27 @@
 mod control;
 mod recog;
 
-#[cfg(any(all(feature = "windows", feature = "xserver"), all(feature = "wayland", feature = "xserver"), all(feature = "windows", feature = "wayland")))]
+#[cfg(any(
+    all(feature = "windows", feature = "xserver"),
+    all(feature = "wayland", feature = "xserver"),
+    all(feature = "windows", feature = "wayland")
+))]
 compile_error!("multiple window managers are incompatible");
 
+#[cfg(feature = "wayland")]
+mod wayland;
 #[cfg(feature = "windows")]
 mod win32;
 #[cfg(feature = "xserver")]
 mod xserver;
-#[cfg(feature = "wayland")]
-mod wayland;
 
+use control::{Controller, Eyes};
+use recog::Brain;
 use std::{
     io::Write,
     sync::mpsc::sync_channel,
     thread::{spawn, JoinHandle},
 };
-use control::{Controller, Eyes};
-use recog::Brain;
 
 type ResultJoinHandle = JoinHandle<eyre::Result<()>>;
 pub struct Handles {
@@ -31,12 +35,12 @@ fn _launch<E: Eyes + 'static, C: Controller + 'static>(window_name: &str) -> eyr
     let eyes = <E as Eyes>::from_window_name(window_name)?;
     let controller = <C as Controller>::from_window_name(window_name)?;
     let brain = Brain::new();
-    
+
     let (s1, r1) = sync_channel(2);
     let (s2, r2) = sync_channel(2);
     let eyes = spawn(move || eyes.run(s1));
     let brain = spawn(move || brain.run(r1, s2));
-    let controller= spawn(move || controller.run(r2));
+    let controller = spawn(move || controller.run(r2));
     Ok(Handles {
         brain,
         eyes,
@@ -51,15 +55,21 @@ pub fn launch(window_name: &str) -> eyre::Result<Handles> {
     return _launch::<xserver::XEyes, xserver::XController>(window_name);
     #[cfg(feature = "wayland")]
     return _launch::<wayland::WaylandEyes, wayland::WaylandController>(window_name);
-    #[cfg(all(not(feature="windows"), not(feature="xserver"), not(feature="wayland")))]
+    #[cfg(all(
+        not(feature = "windows"),
+        not(feature = "xserver"),
+        not(feature = "wayland")
+    ))]
     panic!("no features selected")
 }
-
 
 fn main() -> eyre::Result<()> {
     let handles = launch("World of Warcraft")?;
     for _ in 0.. {
-        if handles.brain.is_finished() || handles.controller.is_finished() || handles.eyes.is_finished() {
+        if handles.brain.is_finished()
+            || handles.controller.is_finished()
+            || handles.eyes.is_finished()
+        {
             break;
         }
         std::io::stdout().flush()?;
