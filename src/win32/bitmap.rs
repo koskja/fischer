@@ -15,7 +15,7 @@ pub struct Bitmap {
     info: BITMAPINFO,
     handle: HBITMAP,
     output_hdc: DeleteHDC,
-    desktop_hdc: ReleaseHDC
+    desktop_hdc: ReleaseHDC,
 }
 
 impl Bitmap {
@@ -43,14 +43,22 @@ impl Bitmap {
         let desktop_hdc = ReleaseHDC::from_hwnd(dwin);
         println!("{:?}", info);
         let handle = unsafe {
-            CreateDIBSection(desktop_hdc.1, &info, DIB_RGB_COLORS, &mut data_ptr, HANDLE(0), 0).unwrap()
+            CreateDIBSection(
+                desktop_hdc.1,
+                &info,
+                DIB_RGB_COLORS,
+                &mut data_ptr,
+                HANDLE(0),
+                0,
+            )
+            .unwrap()
         };
 
         Ok(Self {
             info,
             handle,
             output_hdc: unsafe { DeleteHDC(CreateCompatibleDC(desktop_hdc.1)) },
-            desktop_hdc
+            desktop_hdc,
         })
     }
     pub fn select_swap(&self, hdc: HDC) -> HGDIOBJ {

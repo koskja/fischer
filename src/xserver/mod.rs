@@ -7,7 +7,10 @@ impl Controller for XController {
         todo!()
     }
 
-    fn run(self, recv: std::sync::mpsc::Receiver<crate::control::ToController>) -> eyre::Result<()> {
+    fn run(
+        self,
+        recv: std::sync::mpsc::Receiver<crate::control::ToController>,
+    ) -> eyre::Result<()> {
         todo!()
     }
 }

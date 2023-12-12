@@ -1,6 +1,5 @@
 use crate::control::{Controller, Eyes};
 
-
 pub struct WaylandController;
 pub struct WaylandEyes;
 impl Controller for WaylandController {
@@ -8,7 +7,10 @@ impl Controller for WaylandController {
         todo!()
     }
 
-    fn run(self, recv: std::sync::mpsc::Receiver<crate::control::ToController>) -> eyre::Result<()> {
+    fn run(
+        self,
+        recv: std::sync::mpsc::Receiver<crate::control::ToController>,
+    ) -> eyre::Result<()> {
         todo!()
     }
 }
