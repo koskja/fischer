@@ -1,6 +1,9 @@
 mod bitmap;
 use self::bitmap::Bitmap;
-use crate::control::{Controller, Eyes, ToBrain, ToController};
+use crate::{
+    control::{Controller, Eyes, ToBrain, ToController},
+    util::{sync_duplex, SyncDuplex},
+};
 use bitflags::bitflags;
 use eyre::bail;
 use std::{
@@ -314,33 +317,30 @@ impl Win32Eyes {
     pub fn thdc(&self) -> HDC {
         unsafe { GetWindowDC(self.hwnd) }
     }
-    fn helper(
-        recv_in: Receiver<Bitmap>,
-        send_in: SyncSender<Bitmap>,
-        send_out: SyncSender<ToBrain>,
-    ) -> eyre::Result<()> {
+    fn helper(comms: SyncDuplex<Bitmap>, send_out: SyncSender<ToBrain>) -> eyre::Result<()> {
         loop {
-            let next = recv_in.recv()?;
-            let res = next.to_image();
-            send_out.send(ToBrain::NextFrame(res))?;
-            send_in.send(next)?;
+            comms.use_value(|bmp| {
+                let res = bmp.to_image();
+                send_out.send(ToBrain::NextFrame(res))?;
+                Ok(())
+            })?;
         }
     }
     fn _run(self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
-        let (s1, r1) = sync_channel(2);
-        let (s2, r2) = sync_channel(2);
+        let (master, slave) = sync_duplex(2);
         for _ in 0..2 {
-            s2.send(Bitmap::for_window(self.hwnd)?).unwrap();
+            slave.send(Bitmap::for_window(self.hwnd)?).unwrap();
         }
-        let handle = spawn(move || Self::helper(r1, s2, send));
+        let handle = spawn(move || Self::helper(slave, send));
         loop {
-            let mut bmp = r2.recv()?;
-            let r = self.trect();
-            if (r.bottom - r.top) != bmp.height() || (r.right - r.left) != bmp.width() {
-                bmp = Bitmap::for_window(self.hwnd)?;
-            }
-            bmp.copy_from(self.trect());
-            s1.send(bmp)?;
+            master.use_value(|bmp| {
+                let r = self.trect();
+                if (r.bottom - r.top) != bmp.height() || (r.right - r.left) != bmp.width() {
+                    *bmp = Bitmap::for_window(self.hwnd)?;
+                }
+                bmp.copy_from(self.trect());
+                Ok(())
+            })?;
             if handle.is_finished() {
                 handle
                     .join()
