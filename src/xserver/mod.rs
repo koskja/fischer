@@ -1,5 +1,6 @@
 use crate::control::{Controller, Eyes, ToBrain, ToController};
 
+use eyre::Context;
 use image::{ImageBuffer, Rgb};
 use std::{
     process::Command,
@@ -23,12 +24,13 @@ fn get_window_id_by_title(name: &str) -> eyre::Result<xlib::Window> {
         .args(&["search", "--name", &format!("{name}$")])
         .output()?;
 
-    let binding = String::from_utf8(output.stdout).expect("Error getting window id");
+    let binding =
+        String::from_utf8(output.stdout).expect("Error converting process stdout to utf8");
     let window_id_str = binding.as_str();
     let window_id = window_id_str
         .trim()
         .parse()
-        .expect("Window \'World of Warcraft\' not found");
+        .context(format!("Window {name} not found"))?;
     Ok(window_id)
 }
 
@@ -96,147 +98,111 @@ impl XController {
         unsafe {
             // Move the mouse to the specified coordinates
             xlib::XWarpPointer(self.display, 0, self.window, 0, 0, 0, 0, x, y);
-            xlib::XFlush(self.display);
         }
     }
     pub fn left_click(&self, x: i32, y: i32) {
         unsafe {
-            {
-                // Create a button press event
-                let button_event: xlib::XButtonEvent = xlib::XButtonEvent {
-                    type_: xlib::ButtonPress,
-                    display: self.display,
-                    window: self.window,
-                    subwindow: 0,
-                    time: 0,
-                    x: x,
-                    y: y,
-                    same_screen: xlib::True,
-                    button: 1,
-                    serial: Default::default(),
-                    send_event: Default::default(),
-                    root: Default::default(),
-                    x_root: Default::default(),
-                    y_root: Default::default(),
-                    state: Default::default(),
-                };
+            // Create a button press event
+            let button_event: xlib::XButtonEvent = xlib::XButtonEvent {
+                type_: xlib::ButtonPress,
+                display: self.display,
+                window: self.window,
+                subwindow: 0,
+                time: 0,
+                x: x,
+                y: y,
+                same_screen: xlib::True,
+                button: 1,
+                ..std::mem::zeroed()
+            };
 
-                let mut xevent: xlib::XEvent = xlib::XEvent {
-                    button: button_event,
-                };
+            let mut xevent: xlib::XEvent = xlib::XEvent {
+                button: button_event,
+            };
 
-                // Send the button press event
-                xlib::XSendEvent(
-                    self.display,
-                    self.window,
-                    xlib::True,
-                    xlib::ButtonPressMask,
-                    &mut xevent,
-                );
-                xlib::XFlush(self.display);
-            }
+            // Send the button press event
+            xlib::XSendEvent(
+                self.display,
+                self.window,
+                xlib::True,
+                xlib::ButtonPressMask,
+                &mut xevent,
+            );
 
-            {
-                let button_event: xlib::XButtonEvent = xlib::XButtonEvent {
-                    type_: xlib::ButtonRelease,
-                    display: self.display,
-                    window: self.window,
-                    subwindow: 0,
-                    time: 0,
-                    x: x,
-                    y: y,
-                    same_screen: xlib::True,
-                    button: 1,
-                    serial: Default::default(),
-                    send_event: Default::default(),
-                    root: Default::default(),
-                    x_root: Default::default(),
-                    y_root: Default::default(),
-                    state: Default::default(),
-                };
+            let button_event: xlib::XButtonEvent = xlib::XButtonEvent {
+                type_: xlib::ButtonRelease,
+                display: self.display,
+                window: self.window,
+                subwindow: 0,
+                time: 0,
+                x: x,
+                y: y,
+                same_screen: xlib::True,
+                button: 1,
+                ..std::mem::zeroed()
+            };
 
-                let mut xevent: xlib::XEvent = xlib::XEvent {
-                    button: button_event,
-                };
+            let mut xevent: xlib::XEvent = xlib::XEvent {
+                button: button_event,
+            };
 
-                // Send the button press event
-                xlib::XSendEvent(
-                    self.display,
-                    self.window,
-                    xlib::True,
-                    xlib::ButtonReleaseMask,
-                    &mut xevent,
-                );
-                xlib::XFlush(self.display);
-            }
+            // Send the button press event
+            xlib::XSendEvent(
+                self.display,
+                self.window,
+                xlib::True,
+                xlib::ButtonReleaseMask,
+                &mut xevent,
+            );
         }
     }
     pub fn cast_hook(&self) {
         unsafe {
-            {
-                let key_event: xlib::XKeyEvent = xlib::XKeyEvent {
-                    type_: xlib::KeyPress,
-                    display: self.display,
-                    window: self.window,
-                    subwindow: 0,
-                    time: 0,
-                    x: 0,
-                    y: 0,
-                    same_screen: xlib::True,
-                    keycode: 49,
-                    serial: Default::default(),
-                    send_event: Default::default(),
-                    root: Default::default(),
-                    x_root: Default::default(),
-                    y_root: Default::default(),
-                    state: Default::default(),
-                };
+            let key_event: xlib::XKeyEvent = xlib::XKeyEvent {
+                type_: xlib::KeyPress,
+                display: self.display,
+                window: self.window,
+                subwindow: 0,
+                time: 0,
+                x: 0,
+                y: 0,
+                same_screen: xlib::True,
+                keycode: 49,
+                ..std::mem::zeroed()
+            };
 
-                let mut xevent: xlib::XEvent = xlib::XEvent { key: key_event };
+            let mut xevent: xlib::XEvent = xlib::XEvent { key: key_event };
 
-                xlib::XSendEvent(
-                    self.display,
-                    self.window,
-                    xlib::True,
-                    xlib::KeyPressMask,
-                    &mut xevent,
-                );
+            xlib::XSendEvent(
+                self.display,
+                self.window,
+                xlib::True,
+                xlib::KeyPressMask,
+                &mut xevent,
+            );
 
-                // Flush the X server to ensure the changes take effect
-                xlib::XFlush(self.display);
-            }
-            {
-                let key_event: xlib::XKeyEvent = xlib::XKeyEvent {
-                    type_: xlib::KeyRelease,
-                    display: self.display,
-                    window: self.window,
-                    subwindow: 0,
-                    time: 0,
-                    x: 0,
-                    y: 0,
-                    same_screen: xlib::True,
-                    keycode: 49,
-                    serial: Default::default(),
-                    send_event: Default::default(),
-                    root: Default::default(),
-                    x_root: Default::default(),
-                    y_root: Default::default(),
-                    state: Default::default(),
-                };
+            let key_event: xlib::XKeyEvent = xlib::XKeyEvent {
+                type_: xlib::KeyRelease,
+                display: self.display,
+                window: self.window,
+                subwindow: 0,
+                time: 0,
+                x: 0,
+                y: 0,
+                same_screen: xlib::True,
+                keycode: 49,
+                ..std::mem::zeroed()
+            };
 
-                let mut xevent: xlib::XEvent = xlib::XEvent { key: key_event };
+            let mut xevent: xlib::XEvent = xlib::XEvent { key: key_event };
 
-                xlib::XSendEvent(
-                    self.display,
-                    self.window,
-                    xlib::True,
-                    xlib::KeyReleaseMask,
-                    &mut xevent,
-                );
-
-                // Flush the X server to ensure the changes take effect
-                xlib::XFlush(self.display);
-            }
+            xlib::XSendEvent(
+                self.display,
+                self.window,
+                xlib::True,
+                xlib::KeyReleaseMask,
+                &mut xevent,
+            );
         }
     }
 }
@@ -251,6 +217,9 @@ impl Controller for XController {
                 ToController::MoveMouse([x, y]) => self.move_mouse_to_coordinate(x, y),
                 ToController::PerformClick([x, y]) => self.left_click(x, y),
                 ToController::CastHook => self.cast_hook(),
+            }
+            unsafe {
+                xlib::XFlush(self.display);
             }
         }
     }
