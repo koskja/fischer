@@ -1,7 +1,7 @@
 mod bitmap;
 use self::bitmap::Bitmap;
 use crate::{
-    control::{Controller, Eyes, ToBrain, ToController},
+    control::{Controller, Eyes, GuiContext, ToBrain, ToController},
     util::{sync_duplex, SyncDuplex},
 };
 use bitflags::bitflags;
@@ -9,7 +9,7 @@ use eyre::bail;
 use std::{
     ffi::CString,
     ops::Deref,
-    sync::mpsc::{sync_channel, Receiver, SyncSender},
+    sync::mpsc::{Receiver, SyncSender},
     thread::spawn,
 };
 use windows::{
@@ -299,14 +299,8 @@ pub struct Win32Eyes {
     hwnd: HWND,
 }
 impl Win32Eyes {
-    pub fn new(window_name: &str) -> eyre::Result<Self> {
-        let cstr = CString::new(window_name).unwrap();
-        let window =
-            unsafe { FindWindowA(PCSTR::null(), PCSTR::from_raw(cstr.as_ptr() as *const _)) };
-        if window.0 == 0 {
-            bail!("Failed to find window {window_name}")
-        }
-        Ok(Self { hwnd: window })
+    pub fn new(hwnd: HWND) -> eyre::Result<Self> {
+        Ok(Self { hwnd })
     }
     pub fn make_hands(&self) -> Win32Controller {
         Win32Controller { hwnd: self.hwnd }
@@ -354,10 +348,8 @@ pub struct Win32Controller {
     hwnd: HWND,
 }
 impl Win32Controller {
-    pub fn new(name: &str) -> eyre::Result<Self> {
-        Ok(Self {
-            hwnd: Win32Eyes::new(name)?.hwnd,
-        })
+    pub fn new(hwnd: HWND) -> eyre::Result<Self> {
+        Ok(Self { hwnd })
     }
     pub fn move_mouse(&self, x: i32, y: i32) {
         send_input(mouse_input_list(
@@ -398,20 +390,40 @@ impl Win32Controller {
 }
 
 impl Controller for Win32Controller {
-    fn from_window_name(name: &str) -> eyre::Result<Self> {
-        Self::new(name)
-    }
-
     fn run(self, recv: Receiver<ToController>) -> eyre::Result<()> {
         Self::_run(self, recv)
     }
 }
 impl Eyes for Win32Eyes {
-    fn from_window_name(name: &str) -> eyre::Result<Self> {
-        Self::new(name)
-    }
-
     fn run(self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
         self._run(send)
     }
 }
+
+#[derive(Debug)]
+pub struct Win32Context {
+    hwnd: HWND,
+}
+
+impl GuiContext for Win32Context {
+    type Controller = Win32Controller;
+    type Eyes = Win32Eyes;
+
+    fn from_window_name(name: &str) -> eyre::Result<Self> {
+        let cstr = CString::new(name)?;
+        let hwnd = unsafe { FindWindowA(PCSTR::null(), PCSTR::from_raw(cstr.as_ptr() as *const _)) };
+        if hwnd.0 == 0 {
+            bail!("Failed to find window '{}'", name);
+        }
+        Ok(Self { hwnd })
+    }
+
+    fn controller(&self) -> eyre::Result<Self::Controller> {
+        Win32Controller::new(self.hwnd)
+    }
+
+    fn eyes(&self) -> eyre::Result<Self::Eyes> {
+        Win32Eyes::new(self.hwnd)
+    }
+}
+

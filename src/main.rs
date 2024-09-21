@@ -17,7 +17,7 @@ mod win32;
 #[cfg(feature = "xserver")]
 mod xserver;
 
-use control::{Controller, Eyes};
+use control::{Controller, Eyes, GuiContext};
 use recog::Brain;
 use std::{
     io::Write,
@@ -32,9 +32,10 @@ pub struct Handles {
     pub controller: ResultJoinHandle,
 }
 
-fn _launch<E: Eyes + 'static, C: Controller + 'static>(window_name: &str) -> eyre::Result<Handles> {
-    let eyes = <E as Eyes>::from_window_name(window_name)?;
-    let controller = <C as Controller>::from_window_name(window_name)?;
+fn _launch<C: GuiContext + 'static>(window_name: &str) -> eyre::Result<Handles> {
+    let context = <C as GuiContext>::from_window_name(window_name)?;
+    let eyes = context.eyes()?;
+    let controller = context.controller()?;
     let brain = Brain::new();
 
     let (s1, r1) = sync_channel(2);
@@ -51,11 +52,11 @@ fn _launch<E: Eyes + 'static, C: Controller + 'static>(window_name: &str) -> eyr
 
 pub fn launch(window_name: &str) -> eyre::Result<Handles> {
     #[cfg(feature = "windows")]
-    return _launch::<win32::Win32Eyes, win32::Win32Controller>(window_name);
+    return _launch::<win32::Win32Context>(window_name);
     #[cfg(feature = "xserver")]
-    return _launch::<xserver::XEyes, xserver::XController>(window_name);
+    return _launch::<xserver::XContext>(window_name);
     #[cfg(feature = "wayland")]
-    return _launch::<wayland::WaylandEyes, wayland::WaylandController>(window_name);
+    return _launch::<wayland::WaylandContext>(window_name);
     #[cfg(all(
         not(feature = "windows"),
         not(feature = "xserver"),

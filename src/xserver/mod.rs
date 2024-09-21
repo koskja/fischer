@@ -1,4 +1,4 @@
-use crate::control::{Controller, Eyes, ToBrain, ToController};
+use crate::control::{Controller, Eyes, GuiContext, ToBrain, ToController};
 
 use eyre::Context;
 use image::{ImageBuffer, Rgb};
@@ -9,13 +9,35 @@ use std::{
 };
 use x11::xlib::{self, _XDisplay};
 
+#[derive(Debug, Clone, Copy)]
+pub struct XContext {
+    window: xlib::Window,
+}
+impl GuiContext for XContext {
+    type Controller = XController;
+    type Eyes = XEyes;
+
+    fn from_window_name(name: &str) -> eyre::Result<Self> {
+        let window = get_window_id_by_title(name)?;
+        Ok(Self { window })
+    }
+
+    fn controller(&self) -> eyre::Result<Self::Controller> {
+        XController::new(self.window)
+    }
+
+    fn eyes(&self) -> eyre::Result<Self::Eyes> {
+        XEyes::new(self.window)
+    }
+}
+
 pub struct XController {
-    window: u64,
+    window: xlib::Window,
     display: *mut _XDisplay,
 }
 
 pub struct XEyes {
-    window: u64,
+    window: xlib::Window,
     display: *mut _XDisplay,
 }
 
@@ -35,9 +57,9 @@ fn get_window_id_by_title(name: &str) -> eyre::Result<xlib::Window> {
 }
 
 impl XEyes {
-    pub fn new(window_name: &str) -> eyre::Result<Self> {
+    pub fn new(window: xlib::Window) -> eyre::Result<Self> {
         Ok(Self {
-            window: get_window_id_by_title(window_name)?,
+            window,
             display: unsafe { xlib::XOpenDisplay(ptr::null()) },
         })
     }
@@ -87,9 +109,9 @@ impl XEyes {
 }
 
 impl XController {
-    pub fn new(window_name: &str) -> eyre::Result<Self> {
+    pub fn new(window: xlib::Window) -> eyre::Result<Self> {
         Ok(Self {
-            window: get_window_id_by_title(window_name)?,
+            window,
             display: unsafe { xlib::XOpenDisplay(ptr::null()) },
         })
     }
@@ -207,10 +229,6 @@ impl XController {
     }
 }
 impl Controller for XController {
-    fn from_window_name(name: &str) -> eyre::Result<Self> {
-        Self::new(name)
-    }
-
     fn run(self, input: Receiver<ToController>) -> eyre::Result<()> {
         loop {
             match input.recv()? {
@@ -225,10 +243,6 @@ impl Controller for XController {
     }
 }
 impl Eyes for XEyes {
-    fn from_window_name(name: &str) -> eyre::Result<Self> {
-        Self::new(name)
-    }
-
     fn run(self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
         loop {
             send.send(ToBrain::NextFrame(self.get_image()?))?;

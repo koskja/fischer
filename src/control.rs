@@ -13,12 +13,16 @@ pub enum ToController {
     /// Sends a message that the BACKTICK key was pressed
     CastHook,
 }
-
-pub trait Controller: Sized + Send + Sync {
+pub trait GuiContext: Sized + Send + Sync {
+    type Controller: Controller;
+    type Eyes: Eyes;
     fn from_window_name(name: &str) -> eyre::Result<Self>;
+    fn controller(&self) -> eyre::Result<Self::Controller>;
+    fn eyes(&self) -> eyre::Result<Self::Eyes>;
+}
+pub trait Controller: Sized + Send + Sync {
     fn run(self, recv: Receiver<ToController>) -> eyre::Result<()>;
 }
 pub trait Eyes: Sized + Send + Sync {
-    fn from_window_name(name: &str) -> eyre::Result<Self>;
     fn run(self, send: SyncSender<ToBrain>) -> eyre::Result<()>;
 }
