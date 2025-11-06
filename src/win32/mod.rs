@@ -411,7 +411,8 @@ impl GuiContext for Win32Context {
 
     fn from_window_name(name: &str) -> eyre::Result<Self> {
         let cstr = CString::new(name)?;
-        let hwnd = unsafe { FindWindowA(PCSTR::null(), PCSTR::from_raw(cstr.as_ptr() as *const _)) };
+        let hwnd =
+            unsafe { FindWindowA(PCSTR::null(), PCSTR::from_raw(cstr.as_ptr() as *const _)) };
         if hwnd.0 == 0 {
             bail!("Failed to find window '{}'", name);
         }
@@ -426,4 +427,3 @@ impl GuiContext for Win32Context {
         Win32Eyes::new(self.hwnd)
     }
 }
-

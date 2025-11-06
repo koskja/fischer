@@ -83,9 +83,7 @@ impl WaylandController {
     }
 
     pub fn cast_hook(&self) -> eyre::Result<()> {
-        Command::new("ydotool")
-            .args(["key", "`"])
-            .output()?;
+        Command::new("ydotool").args(["key", "`"]).output()?;
         Ok(())
     }
 }
