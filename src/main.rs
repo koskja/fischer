@@ -5,11 +5,16 @@ mod util;
 
 #[cfg(any(
     all(feature = "windows", feature = "xserver"),
-    all(feature = "wayland", feature = "xserver"),
-    all(feature = "windows", feature = "wayland")
+    all(feature = "windows", feature = "wayland"),
+    all(feature = "windows", feature = "macos"),
+    all(feature = "xserver", feature = "wayland"),
+    all(feature = "xserver", feature = "macos"),
+    all(feature = "wayland", feature = "macos")
 ))]
 compile_error!("multiple window managers are incompatible");
 
+#[cfg(feature = "macos")]
+mod macos;
 #[cfg(feature = "wayland")]
 mod wayland;
 #[cfg(feature = "windows")]
@@ -57,10 +62,13 @@ pub fn launch(window_name: &str) -> eyre::Result<Handles> {
     return _launch::<xserver::XContext>(window_name);
     #[cfg(feature = "wayland")]
     return _launch::<wayland::WaylandContext>(window_name);
+    #[cfg(feature = "macos")]
+    return _launch::<macos::MacosContext>(window_name);
     #[cfg(all(
         not(feature = "windows"),
         not(feature = "xserver"),
-        not(feature = "wayland")
+        not(feature = "wayland"),
+        not(feature = "macos")
     ))]
     panic!("no features selected")
 }
