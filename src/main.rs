@@ -74,6 +74,9 @@ pub fn launch(window_name: &str) -> eyre::Result<Handles> {
 }
 
 fn main() -> eyre::Result<()> {
+    #[cfg(feature = "macos")]
+    macos::request_permissions()?;
+
     let handles = launch("World of Warcraft")?;
     for _ in 0.. {
         if handles.brain.is_finished()

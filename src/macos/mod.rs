@@ -3,6 +3,7 @@ use std::sync::mpsc::{Receiver, SyncSender};
 use crate::control::{Controller, Eyes, GuiContext, ToBrain, ToController};
 use core_foundation::{
     base::{CFType, TCFType},
+    boolean::CFBoolean,
     dictionary::{CFDictionary, CFDictionaryRef},
     number::CFNumber,
     string::CFString,
@@ -18,6 +19,52 @@ use eyre::{bail, ensure, eyre, Context};
 use image::{ImageBuffer, RgbImage};
 
 const KVK_ANSI_GRAVE: u16 = 50;
+
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    fn AXIsProcessTrustedWithOptions(options: CFDictionaryRef) -> bool;
+    fn CGPreflightScreenCaptureAccess() -> bool;
+    fn CGRequestScreenCaptureAccess() -> bool;
+}
+
+pub fn request_permissions() -> eyre::Result<()> {
+    let accessibility_granted = request_accessibility_permission();
+    if !accessibility_granted {
+        eyre::bail!(
+            "macOS accessibility permission not granted. Please enable accessibility access \
+             for this application in System Settings › Privacy & Security › Accessibility."
+        );
+    }
+
+    let screen_granted = request_screen_capture_permission();
+    if !screen_granted {
+        eyre::bail!(
+            "macOS screen recording permission not granted. Please enable screen recording \
+             for this application in System Settings › Privacy & Security › Screen Recording."
+        );
+    }
+
+    Ok(())
+}
+
+fn request_accessibility_permission() -> bool {
+    let prompt_key = CFString::from_static_string("AXTrustedCheckOptionPrompt");
+    let prompt_value = CFBoolean::true_value();
+    let options =
+        CFDictionary::from_CFType_pairs(&[(prompt_key.as_CFType(), prompt_value.as_CFType())]);
+
+    unsafe { AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef()) }
+}
+
+fn request_screen_capture_permission() -> bool {
+    unsafe {
+        if CGPreflightScreenCaptureAccess() {
+            true
+        } else {
+            CGRequestScreenCaptureAccess()
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 struct WindowInfo {
