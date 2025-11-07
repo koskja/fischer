@@ -262,10 +262,10 @@ fn cgimage_to_rgb(image: &CGImage) -> eyre::Result<RgbImage> {
         for x in 0..width {
             let src = row_start + x * 4;
             let dst = (y * width + x) * 3;
-            let a = bytes[src];
-            let r = bytes[src + 1] as f32;
-            let g = bytes[src + 2] as f32;
-            let b = bytes[src + 3] as f32;
+            let b = bytes[src] as f32;
+            let g = bytes[src + 1] as f32;
+            let r = bytes[src + 2] as f32;
+            let a = bytes[src + 3];
 
             if a == 0 {
                 buffer[dst] = 0;
