@@ -80,7 +80,7 @@ pub struct MacosContext {
 
 pub struct MacosController {
     window: WindowInfo,
-    screen_height: f64,
+    scale_factor: f64,
 }
 
 pub struct MacosEyes {
@@ -112,10 +112,16 @@ impl GuiContext for MacosContext {
 
 impl MacosController {
     fn new(window: WindowInfo) -> eyre::Result<Self> {
-        let screen_height = CGDisplay::main().bounds().size.height;
+        let display = CGDisplay::main();
+        let bounds = display.bounds();
+        let scale_factor = if bounds.size.width > 0.0 {
+            display.pixels_wide() as f64 / bounds.size.width
+        } else {
+            1.0
+        };
         Ok(Self {
             window,
-            screen_height,
+            scale_factor,
         })
     }
 
@@ -164,9 +170,8 @@ impl MacosController {
     }
 
     fn global_point(&self, coords: [i32; 2]) -> CGPoint {
-        let x = self.window.bounds.origin.x + coords[0] as f64;
-        let y_top = self.window.bounds.origin.y + coords[1] as f64;
-        let y = self.screen_height - y_top;
+        let x = self.window.bounds.origin.x + coords[0] as f64 / self.scale_factor / 2.0;
+        let y = self.window.bounds.origin.y + coords[1] as f64 / self.scale_factor / 2.0;
         CGPoint::new(x, y)
     }
 }

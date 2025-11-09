@@ -126,6 +126,8 @@ impl Brain {
         input: Receiver<ToBrain>,
         output: SyncSender<ToController>,
     ) -> eyre::Result<()> {
+        let log_frames = false;
+        let timestamp = Instant::now();
         loop {
             if self.ongoing.is_none() {
                 output.send(self.cast()?)?;
@@ -139,8 +141,22 @@ impl Brain {
             }
             let frame = input.recv().wrap_err("Failed to receive next input")?;
             match frame {
-                ToBrain::NextFrame(frame) => {
+                ToBrain::NextFrame(mut frame) => {
                     if let Some((x, y)) = find_bobber(&frame) {
+                        if log_frames {
+                            for i in -10..=10 {
+                                for j in -10..=10 {
+                                    frame.put_pixel(
+                                        (x + i) as u32,
+                                        (y + j) as u32,
+                                        Rgb([255, 0, 0]),
+                                    );
+                                }
+                            }
+                            frame
+                                .save(format!("frame_{}.png", timestamp.elapsed().as_millis()))
+                                .unwrap();
+                        }
                         output.send(ToController::MoveMouse([x, y]))?;
                         if self.ongoing.as_mut().unwrap().register_pos([x, y]) {
                             output.send(ToController::PerformClick([x, y]))?;
