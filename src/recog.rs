@@ -6,7 +6,7 @@ use std::{
 use eyre::Context;
 use image::{Rgb, RgbImage};
 
-use crate::control::{ToBrain, ToController};
+use crate::control::{ToBrain, ToController, ToEyes};
 
 /// Convert` RGB color to CMYK color space.
 fn rgb_to_cmyk(rgb: Rgb<u8>) -> (f64, f64, f64, f64) {
@@ -125,6 +125,7 @@ impl Brain {
         mut self,
         input: Receiver<ToBrain>,
         output: SyncSender<ToController>,
+        eyes_feedback: SyncSender<ToEyes>,
     ) -> eyre::Result<()> {
         let log_frames = false;
         let timestamp = Instant::now();
@@ -166,6 +167,7 @@ impl Brain {
                     }
                 }
             };
+            eyes_feedback.send(ToEyes::FrameProcessed)?;
         }
     }
 }

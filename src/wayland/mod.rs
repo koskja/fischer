@@ -1,6 +1,7 @@
-use crate::control::{Controller, Eyes, GuiContext};
+use crate::control::{Controller, Eyes, FrameBudget, GuiContext, ToBrain, ToController, ToEyes};
 use std::process::Command;
 use std::str;
+use std::sync::mpsc::{Receiver, SyncSender};
 
 #[derive(Debug, Clone, Copy)]
 struct Selection {
@@ -89,22 +90,19 @@ impl WaylandController {
 }
 
 impl Controller for WaylandController {
-    fn run(
-        self,
-        recv: std::sync::mpsc::Receiver<crate::control::ToController>,
-    ) -> eyre::Result<()> {
+    fn run(self, recv: Receiver<ToController>) -> eyre::Result<()> {
         loop {
             match recv.recv()? {
-                crate::control::ToController::MoveMouse(coords) => {
+                ToController::MoveMouse(coords) => {
                     let adjusted_coords = self.adjust_coords(coords);
                     self.move_mouse(adjusted_coords)?;
                 }
-                crate::control::ToController::PerformClick(coords) => {
+                ToController::PerformClick(coords) => {
                     let adjusted_coords = self.adjust_coords(coords);
                     self.move_mouse(adjusted_coords)?;
                     self.perform_click()?;
                 }
-                crate::control::ToController::CastHook => {
+                ToController::CastHook => {
                     self.cast_hook()?;
                 }
             }
@@ -113,8 +111,10 @@ impl Controller for WaylandController {
 }
 
 impl Eyes for WaylandEyes {
-    fn run(self, send: std::sync::mpsc::SyncSender<crate::control::ToBrain>) -> eyre::Result<()> {
+    fn run(self, send: SyncSender<ToBrain>, recv: Receiver<ToEyes>) -> eyre::Result<()> {
+        let mut budget = FrameBudget::new(recv);
         loop {
+            budget.wait_for_slot()?;
             let grim_output = Command::new("grim")
                 .args([
                     "-g",
@@ -130,7 +130,8 @@ impl Eyes for WaylandEyes {
                 .output()?;
             let image = image::load_from_memory(&grim_output.stdout)?.to_rgb8();
 
-            send.send(crate::control::ToBrain::NextFrame(image))?;
+            send.send(ToBrain::NextFrame(image))?;
+            budget.frame_sent()?;
         }
     }
 }

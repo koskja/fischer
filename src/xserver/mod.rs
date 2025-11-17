@@ -1,4 +1,4 @@
-use crate::control::{Controller, Eyes, GuiContext, ToBrain, ToController};
+use crate::control::{Controller, Eyes, FrameBudget, GuiContext, ToBrain, ToController, ToEyes};
 
 use eyre::Context;
 use image::{ImageBuffer, Rgb};
@@ -243,9 +243,12 @@ impl Controller for XController {
     }
 }
 impl Eyes for XEyes {
-    fn run(self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
+    fn run(self, send: SyncSender<ToBrain>, recv: Receiver<ToEyes>) -> eyre::Result<()> {
+        let mut budget = FrameBudget::new(recv);
         loop {
+            budget.wait_for_slot()?;
             send.send(ToBrain::NextFrame(self.get_image()?))?;
+            budget.frame_sent()?;
         }
     }
 }

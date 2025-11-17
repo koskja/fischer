@@ -22,7 +22,7 @@ mod win32;
 #[cfg(feature = "xserver")]
 mod xserver;
 
-use control::{Controller, Eyes, GuiContext};
+use control::{Controller, Eyes, GuiContext, MAX_FRAMES_IN_FLIGHT};
 use recog::Brain;
 use std::{
     io::Write,
@@ -43,11 +43,12 @@ fn _launch<C: GuiContext + 'static>(window_name: &str) -> eyre::Result<Handles> 
     let controller = context.controller()?;
     let brain = Brain::new();
 
-    let (s1, r1) = sync_channel(2);
-    let (s2, r2) = sync_channel(2);
-    let eyes = spawn(move || eyes.run(s1));
-    let brain = spawn(move || brain.run(r1, s2));
-    let controller = spawn(move || controller.run(r2));
+    let (frames_tx, frames_rx) = sync_channel(MAX_FRAMES_IN_FLIGHT);
+    let (ack_tx, ack_rx) = sync_channel(MAX_FRAMES_IN_FLIGHT);
+    let (ctl_tx, ctl_rx) = sync_channel(2);
+    let eyes = spawn(move || eyes.run(frames_tx, ack_rx));
+    let brain = spawn(move || brain.run(frames_rx, ctl_tx, ack_tx));
+    let controller = spawn(move || controller.run(ctl_rx));
     Ok(Handles {
         brain,
         eyes,

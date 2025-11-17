@@ -1,6 +1,6 @@
 use std::sync::mpsc::{Receiver, SyncSender};
 
-use crate::control::{Controller, Eyes, GuiContext, ToBrain, ToController};
+use crate::control::{Controller, Eyes, FrameBudget, GuiContext, ToBrain, ToController, ToEyes};
 use core_foundation::{
     base::{CFType, TCFType},
     boolean::CFBoolean,
@@ -206,10 +206,13 @@ impl MacosEyes {
 }
 
 impl Eyes for MacosEyes {
-    fn run(self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
+    fn run(self, send: SyncSender<ToBrain>, recv: Receiver<ToEyes>) -> eyre::Result<()> {
+        let mut budget = FrameBudget::new(recv);
         loop {
+            budget.wait_for_slot()?;
             let frame = self.capture()?;
             send.send(ToBrain::NextFrame(frame))?;
+            budget.frame_sent()?;
         }
     }
 }

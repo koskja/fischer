@@ -1,7 +1,7 @@
 mod bitmap;
 use self::bitmap::Bitmap;
 use crate::{
-    control::{Controller, Eyes, GuiContext, ToBrain, ToController},
+    control::{Controller, Eyes, FrameBudget, GuiContext, ToBrain, ToController, ToEyes},
     util::{sync_duplex, SyncDuplex},
 };
 use bitflags::bitflags;
@@ -311,21 +311,28 @@ impl Win32Eyes {
     pub fn thdc(&self) -> HDC {
         unsafe { GetWindowDC(self.hwnd) }
     }
-    fn helper(comms: SyncDuplex<Bitmap>, send_out: SyncSender<ToBrain>) -> eyre::Result<()> {
+    fn helper(
+        comms: SyncDuplex<Bitmap>,
+        send_out: SyncSender<ToBrain>,
+        mut budget: FrameBudget,
+    ) -> eyre::Result<()> {
         loop {
+            budget.wait_for_slot()?;
             comms.use_value(|bmp| {
                 let res = bmp.to_image();
                 send_out.send(ToBrain::NextFrame(res))?;
                 Ok(())
             })?;
+            budget.frame_sent()?;
         }
     }
-    fn _run(self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
+    fn _run(self, send: SyncSender<ToBrain>, recv: Receiver<ToEyes>) -> eyre::Result<()> {
         let (master, slave) = sync_duplex(2);
         for _ in 0..2 {
             slave.send(Bitmap::for_window(self.hwnd)?).unwrap();
         }
-        let handle = spawn(move || Self::helper(slave, send));
+        let budget = FrameBudget::new(recv);
+        let handle = spawn(move || Self::helper(slave, send, budget));
         loop {
             master.use_value(|bmp| {
                 let r = self.trect();
@@ -395,8 +402,8 @@ impl Controller for Win32Controller {
     }
 }
 impl Eyes for Win32Eyes {
-    fn run(self, send: SyncSender<ToBrain>) -> eyre::Result<()> {
-        self._run(send)
+    fn run(self, send: SyncSender<ToBrain>, recv: Receiver<ToEyes>) -> eyre::Result<()> {
+        self._run(send, recv)
     }
 }
 
