@@ -1,4 +1,5 @@
 #![feature(let_chains)]
+#![feature(random)]
 mod control;
 mod recog;
 
