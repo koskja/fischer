@@ -1,7 +1,6 @@
 #![feature(let_chains)]
 mod control;
 mod recog;
-mod util;
 
 #[cfg(any(
     all(feature = "windows", feature = "xserver"),

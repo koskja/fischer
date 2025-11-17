@@ -70,8 +70,6 @@ fn request_screen_capture_permission() -> bool {
 struct WindowInfo {
     id: u32,
     bounds: CGRect,
-    owner: Option<String>,
-    title: Option<String>,
 }
 
 pub struct MacosContext {
@@ -295,8 +293,6 @@ fn find_window_by_title(name: &str) -> eyre::Result<WindowInfo> {
         return Ok(WindowInfo {
             id: window_id,
             bounds,
-            owner: owner_title,
-            title: window_title,
         });
     }
 
